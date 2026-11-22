@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Solmar Heat: Neon Run — an open-world crime game</title>
+<style>
+  /* The whole HUD is inline CSS in this one file: neon-dusk panels
+     floating over the 3D view. Nothing fetched, nothing external. */
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #171126; font-family: system-ui, 'Segoe UI', sans-serif; color: #fff; }
+  #game { position: fixed; inset: 0; }
+  #game canvas { display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 5; }
+  #money { position: absolute; top: 12px; left: 14px; font-size: 27px; font-weight: 800; color: #2ee06a; text-shadow: 0 2px 7px rgba(0,0,0,0.85); }
+  #objective { position: absolute; top: 50px; left: 14px; font-size: 14px; font-weight: 600; color: #ffe9a8; text-shadow: 0 1px 4px rgba(0,0,0,0.95); max-width: 440px; line-height: 1.35; }
+  #stars { position: absolute; top: 12px; right: 14px; font-size: 24px; letter-spacing: 3px; text-shadow: 0 2px 6px rgba(0,0,0,0.85); }
+  #bust-wrap { position: absolute; top: 44px; right: 14px; width: 130px; display: none; }
+  #bust-wrap .bar-label { color: #ff8a7a; }
+  #bust-bar { height: 100%; width: 0%; background: #ff3b30; transition: width 0.1s; }
+  #clock { position: absolute; top: 62px; right: 14px; font-size: 15px; font-weight: 700; text-shadow: 0 1px 4px rgba(0,0,0,0.9); }
+  #radio { position: absolute; top: 84px; right: 14px; font-size: 12px; letter-spacing: 1.5px; color: #ff9ad4; text-shadow: 0 1px 4px rgba(0,0,0,0.9); }
+  #minimap { position: absolute; left: 14px; bottom: 104px; width: 150px; height: 150px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.45); background: rgba(18,14,34,0.72); }
+  #bars { position: absolute; left: 14px; bottom: 14px; width: 215px; }
+  .bar-label { font-size: 10px; letter-spacing: 1.5px; color: #cfc8e8; margin: 3px 0 2px; }
+  .bar-outer { height: 11px; background: rgba(0,0,0,0.62); border-radius: 6px; overflow: hidden; }
+  #health-bar { height: 100%; width: 100%; background: #2ad44a; transition: width 0.15s; }
+  #sprint-bar { height: 100%; width: 100%; background: #ffd24a; transition: width 0.15s; }
+  #weapon-box { position: absolute; right: 14px; bottom: 14px; text-align: right; text-shadow: 0 1px 4px rgba(0,0,0,0.9); }
+  #weapon { font-size: 16px; font-weight: 800; letter-spacing: 1.5px; }
+  #ammo { font-size: 14px; color: #ffe9a8; }
+  #speed { font-size: 23px; font-weight: 800; margin-top: 2px; }
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; display: none; }
+  #crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255,255,255,0.92); }
+  #crosshair::before { left: 8px; top: 0; width: 2px; height: 18px; }
+  #crosshair::after { left: 0; top: 8px; width: 18px; height: 2px; }
+  #message { position: absolute; left: 50%; top: 17%; transform: translateX(-50%); font-size: 26px; font-weight: 800; text-align: center; text-shadow: 0 2px 8px rgba(0,0,0,0.9); }
+  #toast { position: absolute; left: 50%; bottom: 118px; transform: translateX(-50%); font-size: 15px; font-weight: 600; background: rgba(14,10,28,0.78); padding: 7px 16px; border-radius: 20px; opacity: 0; transition: opacity 0.35s; white-space: nowrap; }
+  #banner { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); display: none; flex-direction: column; align-items: center; text-align: center; }
+  #banner-title { font-size: 45px; font-weight: 900; letter-spacing: 5px; color: #ffd24a; text-shadow: 0 3px 16px rgba(0,0,0,0.9); }
+  #banner-text { font-size: 17px; text-shadow: 0 2px 8px rgba(0,0,0,0.9); }
+  #damage-flash { position: fixed; inset: 0; background: radial-gradient(ellipse at center, transparent 52%, rgba(255,0,0,0.55) 100%); opacity: 0; pointer-events: none; z-index: 6; transition: opacity 0.1s; }
+  #debug { position: fixed; left: 8px; bottom: 8px; z-index: 20; background: rgba(0,0,0,0.82); color: #7dff9a; font: 12px monospace; padding: 8px; white-space: pre; display: none; max-width: 92vw; }
+  .screen { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 10; background: linear-gradient(180deg, rgba(38,16,58,0.78), rgba(8,6,18,0.9)); text-align: center; padding: 20px; }
+  .screen h1 { font-size: 60px; margin: 0; letter-spacing: 6px; color: #ffd24a; text-shadow: 0 0 26px rgba(255,79,216,0.5), 0 4px 0 rgba(0,0,0,0.5); }
+  .screen h2 { font-size: 17px; font-weight: 400; color: #ffb3d9; margin: 10px 0 22px; letter-spacing: 2.5px; }
+  .screen p { max-width: 600px; color: #ddd; line-height: 1.65; font-size: 15px; }
+  .screen button { pointer-events: auto; font-size: 17px; font-weight: 700; padding: 12px 30px; margin: 6px; border: none; border-radius: 8px; background: #ffd24a; color: #1a1426; cursor: pointer; }
+  .screen button:hover { background: #ffe08a; }
+  .screen button.secondary { background: transparent; border: 2px solid #ffd24a; color: #ffd24a; }
+  .controls { font-size: 13px; color: #b8b2cc; line-height: 2; margin-top: 20px; }
+  .controls b { color: #fff; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.min.js" } }
+</script>
+</head>
+<body>
+<div id="game"></div>
+<div id="damage-flash"></div>
+
+<div id="hud">
+  <div id="money">$0</div>
+  <div id="objective">Welcome to Solmar City — press M for the next job</div>
+  <div id="stars">☆☆☆☆☆</div>
+  <div id="bust-wrap">
+    <div class="bar-label">BUSTED</div>
+    <div class="bar-outer"><div id="bust-bar"></div></div>
+  </div>
+  <div id="clock">19:20</div>
+  <div id="radio">♪ SOLMAR FM</div>
+  <canvas id="minimap" width="150" height="150"></canvas>
+  <div id="bars">
+    <div class="bar-label">HEALTH</div>
+    <div class="bar-outer"><div id="health-bar"></div></div>
+    <div class="bar-label">SPRINT</div>
+    <div class="bar-outer"><div id="sprint-bar"></div></div>
+  </div>
+  <div id="weapon-box">
+    <div id="weapon">FISTS</div>
+    <div id="ammo">—</div>
+    <div id="speed"></div>
+  </div>
+  <div id="crosshair"></div>
+  <div id="message"></div>
+  <div id="toast"></div>
+  <div id="banner"><div id="banner-title"></div><div id="banner-text"></div></div>
+</div>
+
+<div id="title-screen" class="screen">
+  <h1>SOLMAR HEAT: NEON RUN</h1>
+  <h2>AN OPEN-WORLD CRIME STORY — SOLMAR CITY UNDER NEON</h2>
+  <p>Jax Moreno swore he was done. Mona Reyes has ten jobs that say
+  otherwise. Run them across a living coastal city at dusk — lane-true
+  traffic, crowds, the Solmar PD and the Vultures all keeping their own
+  hours. Between jobs, fence stolen cars at the Chop Shop, run couriers,
+  race the neon checkpoints, carry fares, and hunt the twelve golden
+  tokens. The city pays those who keep moving.</p>
+  <div>
+    <button id="new-game">NEW GAME</button>
+    <button id="continue-game" class="secondary" style="display:none">CONTINUE</button>
+  </div>
+  <div class="controls">
+    <b>WASD</b> move &nbsp;·&nbsp; <b>Mouse</b> look &nbsp;·&nbsp; <b>Shift</b> sprint &nbsp;·&nbsp; <b>Space</b> jump / handbrake<br>
+    <b>E</b> enter / exit / steal car &nbsp;·&nbsp; <b>Click</b> shoot &nbsp;·&nbsp; <b>1 / 2</b> fists / pistol &nbsp;·&nbsp; <b>R</b> reload<br>
+    <b>M</b> story job &nbsp;·&nbsp; <b>T</b> courier &nbsp;·&nbsp; <b>G</b> street race &nbsp;·&nbsp; <b>Y</b> taxi fare &nbsp;·&nbsp; <b>H</b> horn &nbsp;·&nbsp; <b>Esc</b> pause
+  </div>
+</div>
+
+<div id="pause-screen" class="screen">
+  <h1>PAUSED</h1>
+  <h2>THE NEON HOLDS ITS BREATH</h2>
+  <div><button id="resume-game">RESUME</button></div>
+  <div class="controls">
+    <b>WASD</b> move &nbsp;·&nbsp; <b>Mouse</b> look &nbsp;·&nbsp; <b>Shift</b> sprint &nbsp;·&nbsp; <b>Space</b> jump / handbrake<br>
+    <b>E</b> enter / exit / steal car &nbsp;·&nbsp; <b>Click</b> shoot &nbsp;·&nbsp; <b>1 / 2</b> fists / pistol &nbsp;·&nbsp; <b>R</b> reload<br>
+    <b>M</b> story job &nbsp;·&nbsp; <b>T</b> courier &nbsp;·&nbsp; <b>G</b> street race &nbsp;·&nbsp; <b>Y</b> taxi fare &nbsp;·&nbsp; <b>H</b> horn &nbsp;·&nbsp; <b>Esc</b> pause
+  </div>
+</div>
+
+<div id="end-screen" class="screen">
+  <h1 id="end-title">BUSTED</h1>
+  <h2 id="end-text"></h2>
+  <div>
+    <button id="retry-game">RETRY</button>
+    <button id="title-game" class="secondary">TITLE SCREEN</button>
+  </div>
+</div>
+
+<pre id="debug"></pre>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
